@@ -14,8 +14,17 @@ _ssl_ctx = ssl_module.create_default_context()
 _ssl_ctx.check_hostname = False
 _ssl_ctx.verify_mode = ssl_module.CERT_NONE
 
+# Normalize DATABASE_URL — Supabase provides postgres:// or postgresql://
+# but asyncpg requires the postgresql+asyncpg:// scheme.
+def _normalize_db_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        return "postgresql+asyncpg://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + url[len("postgresql://"):]
+    return url
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _normalize_db_url(settings.DATABASE_URL),
     echo=False,
     pool_pre_ping=True,
     pool_size=5,
