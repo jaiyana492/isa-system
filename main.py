@@ -17,6 +17,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -42,6 +43,19 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # LIFESPAN — STARTUP / SHUTDOWN
 # ─────────────────────────────────────────────────────────────────────────────
+
+async def _keep_alive():
+    """Ping own URL every 4 minutes so Render free tier never sleeps."""
+    await asyncio.sleep(60)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while True:
+            try:
+                await client.get(f"https://{settings.APP_DOMAIN}/")
+                logger.info("KEEP-ALIVE | OK")
+            except Exception as e:
+                logger.warning("KEEP-ALIVE | Failed | %s", str(e))
+            await asyncio.sleep(240)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,11 +93,15 @@ async def lifespan(app: FastAPI):
     nurture_task = asyncio.create_task(run_nurture_loop())
     logger.info("NURTURE RUNNER | Background task started")
 
+    keep_alive_task = asyncio.create_task(_keep_alive())
+    logger.info("KEEP-ALIVE | Ping task started")
+
     logger.info("SYSTEM | CorePilora AI is LIVE")
 
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────
+    keep_alive_task.cancel()
     nurture_task.cancel()
     try:
         await nurture_task
