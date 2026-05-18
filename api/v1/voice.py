@@ -470,14 +470,7 @@ async def voice_incoming(request: Request) -> Response:
             except Exception as _redis_err:
                 logger.warning("VOICE INCOMING | Redis unavailable — continuing | error=%s", str(_redis_err))
 
-        twiml = (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            "<Response>"
-            "<Say voice=\"alice\">Hello. This is Jaiyana. The system is working. Please speak after this message.</Say>"
-            "<Pause length=\"30\"/>"
-            "</Response>"
-        )
-        return Response(twiml, media_type="application/xml")
+        return Response(_twiml_connect_stream(call_sid, lead_name), media_type="application/xml")
 
     except Exception as e:
         logger.error("VOICE INCOMING ERROR | error=%s", str(e))
