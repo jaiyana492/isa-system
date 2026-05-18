@@ -42,8 +42,7 @@ phonenumbers==8.13.47
 
 # ── LangGraph ─────────────────────────────────────────────────────────────
 # agents/buyer_graph.py, seller_graph.py, investor_graph.py, graph.py
-langgraph==0.2.0
-langchain-core>=0.2.27,<0.3
+langgraph==0.2.76
 
 # ── WebSockets ────────────────────────────────────────────────────────────
 # api/v1/voice.py (Deepgram STT WebSocket client)
