@@ -62,8 +62,12 @@ async def lifespan(app: FastAPI):
     logger.info("Primary Market: %s", settings.PRIMARY_MARKET)
     logger.info("=" * 60)
 
-    await create_tables()
-    logger.info("DATABASE | Tables created")
+    try:
+        await create_tables()
+        logger.info("DATABASE | Tables created")
+    except Exception as _db_err:
+        logger.error("DATABASE | Startup connection failed | %s", str(_db_err))
+        logger.warning("DATABASE | Continuing — tables will retry on first request")
 
     try:
         from services.audio_cache import warm_up_cache
