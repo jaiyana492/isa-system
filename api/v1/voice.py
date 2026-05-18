@@ -468,16 +468,16 @@ async def voice_incoming(request: Request) -> Response:
 
         lead_name = ""
         if from_number:
-            redis = await get_redis()
-            await redis.setex(_key_call_phone(call_sid), _TTL_CALL_META, from_number)
             try:
+                redis = await get_redis()
+                await redis.setex(_key_call_phone(call_sid), _TTL_CALL_META, from_number)
                 lead_id = await redis.get(_key_phone_index(from_number))
                 if lead_id:
                     from services.cache import get_lead_cache
                     ctx = await get_lead_cache(lead_id)
                     lead_name = (ctx or {}).get("full_name", "")
-            except Exception:
-                pass
+            except Exception as _redis_err:
+                logger.warning("VOICE INCOMING | Redis unavailable — continuing | error=%s", str(_redis_err))
 
         return Response(_twiml_connect_stream(call_sid, lead_name), media_type="application/xml")
 
