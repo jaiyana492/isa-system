@@ -9,7 +9,9 @@ Single config pattern across entire project.
 from __future__ import annotations
 
 import logging
+import ssl as _ssl_mod
 from typing import Optional
+from urllib.parse import urlparse
 
 import redis.asyncio as aioredis
 from redis.asyncio import Redis
@@ -49,15 +51,23 @@ async def get_redis() -> Redis:
     global _redis_client
 
     if _redis_client is None:
-        _redis_client = aioredis.from_url(
-            settings.REDIS_URL,
+        _u = urlparse(settings.REDIS_URL.strip())
+        _ssl_ctx = _ssl_mod.SSLContext(_ssl_mod.PROTOCOL_TLS_CLIENT)
+        _ssl_ctx.check_hostname = False
+        _ssl_ctx.verify_mode = _ssl_mod.CERT_NONE
+        _redis_client = aioredis.Redis(
+            host=_u.hostname,
+            port=_u.port or 6379,
+            password=_u.password,
+            username=_u.username or "default",
+            ssl=True,
+            ssl_context=_ssl_ctx,
             encoding="utf-8",
             decode_responses=True,
             socket_connect_timeout=5,
             socket_timeout=5,
             retry_on_timeout=True,
             health_check_interval=30,
-            ssl_cert_reqs="none",
         )
         logger.info(
             "REDIS | Client initialized | url=%s",
