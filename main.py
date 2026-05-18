@@ -184,7 +184,7 @@ app.include_router(v1_router)
 # ROOT
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {
         "service": "CorePilora AI ISA",

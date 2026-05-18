@@ -11,17 +11,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import ssl as ssl_module
 from typing import Optional
 
 import redis.asyncio as aioredis
 from redis.asyncio import Redis
 
 from config.settings import settings
-
-_ssl_ctx = ssl_module.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = ssl_module.CERT_NONE
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +43,7 @@ async def _get_binary_redis() -> Redis:
             socket_timeout=5,
             retry_on_timeout=True,
             health_check_interval=30,
-            ssl_context=_ssl_ctx,
+            ssl_cert_reqs="none",
         )
     return _binary_redis
 

@@ -9,7 +9,6 @@ Single config pattern across entire project.
 from __future__ import annotations
 
 import logging
-import ssl as ssl_module
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -17,12 +16,6 @@ from redis.asyncio import Redis
 from redis.exceptions import ConnectionError, TimeoutError
 
 from config.settings import settings
-
-# Upstash Redis uses a certificate that Render's CA store may not trust.
-# We require SSL (encrypted) but skip chain verification.
-_ssl_ctx = ssl_module.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = ssl_module.CERT_NONE
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +57,7 @@ async def get_redis() -> Redis:
             socket_timeout=5,
             retry_on_timeout=True,
             health_check_interval=30,
-            ssl_context=_ssl_ctx,
+            ssl_cert_reqs="none",
         )
         logger.info(
             "REDIS | Client initialized | url=%s",
