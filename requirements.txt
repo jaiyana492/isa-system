@@ -23,7 +23,7 @@ asyncpg==0.31.0
 
 # ── Redis ─────────────────────────────────────────────────────────────────
 # config/redis.py, services/cache.py, services/audio_cache.py
-redis[hiredis]==5.1.0
+redis==5.1.0
 
 # ── HTTP Client ───────────────────────────────────────────────────────────
 # agents/buyer_graph.py, seller_graph.py, investor_graph.py (Groq calls)
