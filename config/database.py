@@ -1,3 +1,5 @@
+import logging
+import re
 import ssl as ssl_module
 
 from sqlalchemy.ext.asyncio import (
@@ -8,29 +10,42 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 from config.settings import settings
 
-# Supabase uses SSL but Windows doesn't have their CA in the default trust store.
-# We require SSL (traffic is encrypted) but skip chain verification for dev.
+logger = logging.getLogger(__name__)
+
 _ssl_ctx = ssl_module.create_default_context()
 _ssl_ctx.check_hostname = False
 _ssl_ctx.verify_mode = ssl_module.CERT_NONE
 
-# Normalize DATABASE_URL — Supabase provides postgres:// or postgresql://
-# but asyncpg requires the postgresql+asyncpg:// scheme.
+
 def _normalize_db_url(url: str) -> str:
-    if url.startswith("postgres://"):
-        return "postgresql+asyncpg://" + url[len("postgres://"):]
-    if url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + url[len("postgresql://"):]
+    # Strip invisible whitespace/newlines that can come from copy-paste
+    url = url.strip()
+
+    # Replace any scheme variant with the one asyncpg requires
+    url = re.sub(
+        r"^postgres(?:ql)?(\+[^:]+)?://",
+        "postgresql+asyncpg://",
+        url,
+    )
     return url
 
+
+_raw_url = settings.DATABASE_URL
+_db_url = _normalize_db_url(_raw_url)
+
+# Log scheme only — never log passwords
+logger.info("DATABASE | raw scheme=%s  normalized scheme=%s",
+            _raw_url.split("://")[0] if "://" in _raw_url else "MISSING",
+            _db_url.split("://")[0] if "://" in _db_url else "MISSING")
+
 engine = create_async_engine(
-    _normalize_db_url(settings.DATABASE_URL),
+    _db_url,
     echo=False,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
     connect_args={
-        "statement_cache_size": 0,  # required for Supabase PgBouncer transaction mode
+        "statement_cache_size": 0,
         "ssl": _ssl_ctx,
     },
 )
