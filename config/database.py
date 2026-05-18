@@ -1,5 +1,6 @@
 import logging
 import re
+import ssl as _ssl_mod
 
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
@@ -21,6 +22,10 @@ def _normalize_db_url(url: str) -> str:
 _db_url = _normalize_db_url(settings.DATABASE_URL)
 logger.info("DATABASE | scheme=%s", _db_url.split("://")[0])
 
+_ssl_ctx = _ssl_mod.create_default_context()
+_ssl_ctx.check_hostname = False
+_ssl_ctx.verify_mode = _ssl_mod.CERT_NONE
+
 engine = create_async_engine(
     _db_url,
     echo=False,
@@ -29,7 +34,7 @@ engine = create_async_engine(
     max_overflow=10,
     connect_args={
         "statement_cache_size": 0,
-        "ssl": True,
+        "ssl": _ssl_ctx,
     },
 )
 
