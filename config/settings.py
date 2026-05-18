@@ -6,11 +6,17 @@ Single source of truth for all configuration.
 All environment variables loaded here.
 """
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("APP_DOMAIN", mode="before")
+    @classmethod
+    def strip_app_domain(cls, v: str) -> str:
+        return v.strip()
 
     # Database
     DATABASE_URL: str

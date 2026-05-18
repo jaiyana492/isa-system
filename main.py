@@ -50,7 +50,7 @@ async def _keep_alive():
     async with httpx.AsyncClient(timeout=10.0) as client:
         while True:
             try:
-                await client.get(f"https://{settings.APP_DOMAIN.strip()}/")
+                await client.get(f"https://{settings.APP_DOMAIN}/")
                 logger.info("KEEP-ALIVE | OK")
             except Exception as e:
                 logger.warning("KEEP-ALIVE | Failed | %s", str(e))
