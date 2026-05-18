@@ -399,16 +399,10 @@ async def _persist_voice_session(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _twiml_connect_stream(call_sid: str, lead_name: str = "") -> str:
-    ws_url   = f"wss://{settings.APP_DOMAIN}/api/v1/voice/stream?call_sid={call_sid}"
-    address  = f" {lead_name.split()[0]}" if lead_name and lead_name.lower() != "there" else ""
-    greeting = (
-        f"Hey{address}, this is Jaiyana with CorePilora. "
-        f"What's driving your interest in making a move right now?"
-    )
+    ws_url = f"wss://{settings.APP_DOMAIN}/api/v1/voice/stream?call_sid={call_sid}"
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
-        f'<Say voice="alice">{greeting}</Say>'
         "<Connect>"
         f'<Stream url="{ws_url}" />'
         "</Connect>"
@@ -581,16 +575,27 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
 
         # ── Conversation loop — concurrent with _twilio_loop ──────────────
         async def _conversation_loop() -> None:
-            # Wait for Twilio to confirm stream and provide streamSid
             await stream_ready.wait()
             sid = stream_sid[0]
-            logger.info("VOICE | Stream ready — listening for user | sid=%s", sid)
+            logger.info("VOICE | Stream ready — sending opening | sid=%s", sid)
 
-            # Opening already played by TwiML <Say> — log it to message history
             opening = _build_opening(lead_context)
             messages.append({"role": "assistant", "content": opening})
 
-            # Wait for lead to respond and handle each turn
+            # Synthesize and deliver opening greeting via ElevenLabs/Deepgram
+            try:
+                audio = await _synthesize(opening)
+                if audio and sid:
+                    is_speaking[0] = True
+                    await _send_audio(ws, sid, audio)
+                    audio_duration = len(audio) / _ULAW_BYTES_PER_SEC + 0.5
+                    await asyncio.sleep(audio_duration)
+                    is_speaking[0] = False
+                    logger.info("VOICE | Opening delivered | chars=%s", len(opening))
+            except Exception as e:
+                logger.error("VOICE | Opening synthesis failed | %s", str(e))
+                is_speaking[0] = False
+
             while True:
                 try:
                     transcript = await asyncio.wait_for(q.get(), timeout=90.0)
