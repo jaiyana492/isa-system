@@ -13,10 +13,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    @field_validator("APP_DOMAIN", mode="before")
+    @field_validator(
+        "APP_DOMAIN", "ELEVENLABS_VOICE_ID", "ELEVENLABS_API_KEY",
+        "GROQ_API_KEY", "DEEPGRAM_API_KEY", "REDIS_URL", "DATABASE_URL",
+        "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
+        mode="before",
+    )
     @classmethod
-    def strip_app_domain(cls, v: str) -> str:
-        return v.strip()
+    def strip_strings(cls, v: str) -> str:
+        return v.strip() if isinstance(v, str) else v
 
     # Database
     DATABASE_URL: str
