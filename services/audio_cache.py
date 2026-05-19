@@ -39,15 +39,13 @@ async def _get_binary_redis() -> Redis:
     global _binary_redis
     if _binary_redis is None:
         _u = urlparse(settings.REDIS_URL.strip())
-        _ssl_ctx = _ssl_mod.SSLContext(_ssl_mod.PROTOCOL_TLS_CLIENT)
-        _ssl_ctx.check_hostname = False
-        _ssl_ctx.verify_mode = _ssl_mod.CERT_NONE
         _binary_redis = aioredis.Redis(
             host=_u.hostname,
             port=_u.port or 6379,
             password=_u.password,
             username=_u.username or "default",
-            ssl_context=_ssl_ctx,
+            ssl=True,
+            ssl_cert_reqs="none",
             decode_responses=False,
             socket_connect_timeout=5,
             socket_timeout=5,

@@ -52,15 +52,13 @@ async def get_redis() -> Redis:
 
     if _redis_client is None:
         _u = urlparse(settings.REDIS_URL.strip())
-        _ssl_ctx = _ssl_mod.SSLContext(_ssl_mod.PROTOCOL_TLS_CLIENT)
-        _ssl_ctx.check_hostname = False
-        _ssl_ctx.verify_mode = _ssl_mod.CERT_NONE
         _redis_client = aioredis.Redis(
             host=_u.hostname,
             port=_u.port or 6379,
             password=_u.password,
             username=_u.username or "default",
-            ssl_context=_ssl_ctx,
+            ssl=True,
+            ssl_cert_reqs="none",
             decode_responses=True,
             socket_connect_timeout=5,
             socket_timeout=5,
