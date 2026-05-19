@@ -206,18 +206,21 @@ async def transcribe_audio(audio_url: str) -> Optional[str]:
 
 async def synthesize_speech(text: str) -> Optional[bytes]:
     """
-    Send Jaiyana's text response to ElevenLabs for synthesis.
-    Returns audio bytes for playback via Twilio.
-    None if failed — caller uses fallback TTS.
+    TTS with automatic fallback:
+      1. ElevenLabs (primary) — ulaw_8000 for Twilio compatibility
+      2. Deepgram Aura (fallback) — free, mulaw 8000Hz
+    Returns audio bytes. None if both fail.
     """
+    # ── Primary: ElevenLabs ───────────────────────────────────────────────
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
-                f"https://api.elevenlabs.io/v1/text-to-speech/{settings.ELEVENLABS_VOICE_ID}",
+                f"https://api.elevenlabs.io/v1/text-to-speech"
+                f"/{settings.ELEVENLABS_VOICE_ID}"
+                f"/stream?output_format=ulaw_8000&optimize_streaming_latency=3",
                 headers={
                     "xi-api-key": settings.ELEVENLABS_API_KEY,
                     "Content-Type": "application/json",
-                    "Accept": "audio/mpeg",
                 },
                 json={
                     "text": text,
@@ -231,18 +234,28 @@ async def synthesize_speech(text: str) -> Optional[bytes]:
                 },
             )
             response.raise_for_status()
-
-            logger.info(
-                "COMMUNICATION | Speech synthesized | text_length=%s",
-                len(text),
-            )
+            logger.info("COMMUNICATION | TTS via ElevenLabs | text_length=%s", len(text))
             return response.content
-
     except Exception as e:
-        logger.error(
-            "COMMUNICATION | TTS FAILED | error=%s",
-            str(e),
-        )
+        logger.warning("COMMUNICATION | ElevenLabs TTS failed — trying Deepgram | error=%s", str(e))
+
+    # ── Fallback: Deepgram Aura TTS ───────────────────────────────────────
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                "https://api.deepgram.com/v1/speak"
+                "?model=aura-asteria-en&encoding=mulaw&sample_rate=8000&container=none",
+                headers={
+                    "Authorization": f"Token {settings.DEEPGRAM_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"text": text},
+            )
+            response.raise_for_status()
+            logger.info("COMMUNICATION | TTS via Deepgram fallback | text_length=%s", len(text))
+            return response.content
+    except Exception as e:
+        logger.error("COMMUNICATION | Both TTS providers failed | error=%s", str(e))
         return None
 
 
