@@ -47,7 +47,6 @@ async def _get_binary_redis() -> Redis:
             port=_u.port or 6379,
             password=_u.password,
             username=_u.username or "default",
-            ssl=True,
             ssl_context=_ssl_ctx,
             decode_responses=False,
             socket_connect_timeout=5,
