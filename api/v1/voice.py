@@ -331,11 +331,12 @@ async def _handle_transcript(
     logger.info("VOICE TURN | jaiyana=%s", response_text[:80])
 
     audio = await _synthesize(response_text)
-    if not audio or not stream_sid:
+    if not audio:
+        logger.warning("VOICE TURN | TTS returned no audio | depth=%s", _depth)
         return
 
     is_speaking[0] = True
-    await _send_audio(ws, stream_sid, audio)
+    await _send_audio(ws, stream_sid or "default", audio)
 
     audio_duration = len(audio) / _ULAW_BYTES_PER_SEC + 0.5
     try:
@@ -426,27 +427,40 @@ def _validate_telnyx_signature(request: Request) -> bool:
 @router.post("/incoming")
 async def voice_incoming(request: Request) -> Response:
     """
-    Twilio inbound call webhook.
-    Validates Twilio signature (enforced in production).
-    Stores caller phone in Redis keyed by CallSid.
-    Returns TwiML instructing Twilio to open a Media Stream WebSocket.
+    Telnyx TeXML inbound call webhook.
+    Logs all form fields for diagnosis.
+    Returns TeXML instructing Telnyx to open a Media Stream WebSocket.
     """
     try:
-        form        = await request.form()
-        form_data   = dict(form)
-        call_sid    = str(form_data.get("CallSid", ""))
-        from_number = str(form_data.get("From",    ""))
+        form      = await request.form()
+        form_data = dict(form)
+
+        # Log every field Telnyx sends — critical for diagnosing field-name issues
+        logger.info("VOICE INCOMING | raw_form=%s", json.dumps(form_data))
+
+        # Telnyx TeXML sends CallSid (same as Twilio); fall back to their own IDs
+        call_sid = (
+            str(form_data.get("CallSid") or
+                form_data.get("callSid") or
+                form_data.get("call_sid") or
+                form_data.get("telnyx_call_control_id") or
+                "")
+        )
+        from_number = str(form_data.get("From") or form_data.get("from") or "")
 
         if not _validate_telnyx_signature(request):
+            logger.warning("VOICE INCOMING | Signature validation failed — rejecting")
             return Response(_twiml_reject(), media_type="application/xml", status_code=403)
 
         logger.info("VOICE INCOMING | sid=%s | from=%s", call_sid, from_number)
 
+        # Do NOT reject on missing call_sid — just continue with empty sid so the
+        # stream still connects; we log it above so we can see what Telnyx sent.
         if not call_sid:
-            return Response(_twiml_reject(), media_type="application/xml")
+            logger.warning("VOICE INCOMING | CallSid missing in form — proceeding without sid")
 
         lead_name = ""
-        if from_number:
+        if from_number and call_sid:
             try:
                 redis = await get_redis()
                 await redis.setex(_key_call_phone(call_sid), _TTL_CALL_META, from_number)
@@ -458,7 +472,9 @@ async def voice_incoming(request: Request) -> Response:
             except Exception as _redis_err:
                 logger.warning("VOICE INCOMING | Redis unavailable — continuing | error=%s", str(_redis_err))
 
-        return Response(_twiml_connect_stream(call_sid, lead_name), media_type="application/xml")
+        texml = _twiml_connect_stream(call_sid, lead_name)
+        logger.info("VOICE INCOMING | texml_response=%s", texml)
+        return Response(texml, media_type="application/xml")
 
     except Exception as e:
         logger.error("VOICE INCOMING ERROR | error=%s", str(e))
@@ -544,18 +560,27 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
 
                 event = msg.get("event")
 
-                if event == "start":
+                if event == "connected":
+                    # Telnyx sends "connected" before "start" — just log it
+                    logger.info("VOICE | Stream connected event | raw=%s", json.dumps(msg)[:300])
+
+                elif event == "start":
                     start_data = msg.get("start", {})
-                    # Telnyx may use streamSid, stream_id, or top-level streamSid
+                    # Telnyx TeXML streams: try every known SID field name
                     stream_sid[0] = (
                         start_data.get("streamSid") or
                         start_data.get("stream_id") or
                         start_data.get("streamId") or
+                        start_data.get("callSid") or
                         msg.get("streamSid") or
                         msg.get("stream_id") or
+                        msg.get("callSid") or
                         "default"
                     )
-                    logger.info("VOICE | Stream started | sid=%s | raw=%s", stream_sid[0], json.dumps(msg)[:300])
+                    logger.info(
+                        "VOICE | Stream started | sid=%s | raw=%s",
+                        stream_sid[0], json.dumps(msg)[:500],
+                    )
                     stream_ready.set()
 
                 elif event == "media":
@@ -657,6 +682,22 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
             call_sid,
             len([m for m in messages if m["role"] == "user"]),
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENDPOINT — GET /voice/test  (diagnostic only — remove before go-live)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/test")
+async def voice_test() -> dict:
+    """Returns the TeXML that would be sent for a test call — use to verify endpoint is up."""
+    texml = _twiml_connect_stream("TEST_SID")
+    return {
+        "status": "ok",
+        "webhook_url": f"https://{settings.APP_DOMAIN}/api/v1/voice/incoming",
+        "stream_url":  f"wss://{settings.APP_DOMAIN}/api/v1/voice/stream",
+        "texml":       texml,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
