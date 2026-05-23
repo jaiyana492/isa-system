@@ -418,19 +418,8 @@ def _twiml_reject() -> str:
 # ENDPOINT — POST /voice/incoming
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _validate_twilio_signature(request: Request, form_data: dict) -> bool:
-    # Log validation result but always allow — Render's proxy layer changes
-    # request headers in ways that break Twilio's HMAC check.
-    try:
-        from twilio.request_validator import RequestValidator
-        validator = RequestValidator(settings.TWILIO_AUTH_TOKEN)
-        url       = f"https://{settings.APP_DOMAIN}/api/v1/voice/incoming"
-        signature = request.headers.get("X-Twilio-Signature", "")
-        valid     = validator.validate(url, form_data, signature)
-        if not valid:
-            logger.warning("VOICE | Twilio signature mismatch (allowing anyway) | sig=%s", signature[:20])
-    except Exception as e:
-        logger.error("VOICE | Twilio signature validation error | %s", str(e))
+def _validate_telnyx_signature(request: Request) -> bool:
+    # Always allow — signature validation can be enforced later via TELNYX_PUBLIC_KEY
     return True
 
 
@@ -448,8 +437,7 @@ async def voice_incoming(request: Request) -> Response:
         call_sid    = str(form_data.get("CallSid", ""))
         from_number = str(form_data.get("From",    ""))
 
-        if not _validate_twilio_signature(request, form_data):
-            logger.warning("VOICE INCOMING | Invalid Twilio signature | sid=%s", call_sid)
+        if not _validate_telnyx_signature(request):
             return Response(_twiml_reject(), media_type="application/xml", status_code=403)
 
         logger.info("VOICE INCOMING | sid=%s | from=%s", call_sid, from_number)
