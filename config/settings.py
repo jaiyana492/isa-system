@@ -36,11 +36,9 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str
     GROQ_MODEL: str = "llama3-70b-8192"
 
-    # Twilio
-    TWILIO_ACCOUNT_SID: str
-    TWILIO_AUTH_TOKEN: str
-    TWILIO_PHONE_NUMBER: str
-
+    # Telnyx
+TELNYX_API_KEY: str
+TELNYX_PHONE_NUMBER: str
     # Deepgram
     DEEPGRAM_API_KEY: str
 

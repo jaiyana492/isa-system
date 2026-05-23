@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:4040/api/tunnels)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/voice/incoming -d 'CallSid=CA_test123&From=%2B8801956936001&To=%2B12186758616&CallStatus=ringing' -H 'Content-Type: application/x-www-form-urlencoded')",
+      "Bash(./venv/Scripts/python.exe -c ' *)",
+      "Bash(./venv/Scripts/pip.exe install *)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/voice/incoming -d 'CallSid=CAtest123&From=%2B8801956936001&To=%2B12186758616&CallStatus=ringing' -H 'Content-Type: application/x-www-form-urlencoded')",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //PID 10160)",
+      "Bash(curl -s -X POST https://dipped-reawake-capably.ngrok-free.dev/api/v1/voice/incoming -d 'CallSid=CAtest999&From=%2B8801956936001&To=%2B12186758616&CallStatus=ringing' -H 'Content-Type: application/x-www-form-urlencoded')"
+    ]
+  }
+}

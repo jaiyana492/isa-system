@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv\\\\Scripts\\\\python.exe -c \"import websockets; print\\('websockets OK'\\)\")",
+      "Bash(venv\\\\Scripts\\\\python.exe -c \"import dotenv; print\\('python-dotenv OK'\\)\")",
+      "Bash(venv\\\\Scripts\\\\python.exe -c \"import httpx; print\\('httpx OK'\\)\")",
+      "Bash(venv\\\\Scripts\\\\python.exe -c \"import fastapi; print\\('fastapi OK'\\)\")",
+      "PowerShell(cd \"d:\\\\Dev\\\\projects\\\\isa-system\"; $env:PYTHONIOENCODING=\"utf-8\"; .\\\\venv\\\\Scripts\\\\python.exe test_api.py 2>&1)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object OwningProcess; $pid8000 = \\(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -First 1\\).OwningProcess; if \\($pid8000\\) { Stop-Process -Id $pid8000 -Force; Write-Host \"Killed PID $pid8000\" } else { Write-Host \"Port 8000 is free\" })"
+    ]
+  }
+}
