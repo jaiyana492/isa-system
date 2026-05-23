@@ -521,7 +521,7 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
         try:
             dg_ws = await websockets.connect(
                 _DG_WS_URL,
-                extra_headers={"Authorization": f"Token {settings.DEEPGRAM_API_KEY}"},
+                additional_headers={"Authorization": f"Token {settings.DEEPGRAM_API_KEY}"},
                 ping_interval=20,
                 ping_timeout=10,
             )
@@ -545,8 +545,17 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
                 event = msg.get("event")
 
                 if event == "start":
-                    stream_sid[0] = msg.get("start", {}).get("streamSid", "")
-                    logger.info("VOICE | Stream started | sid=%s", stream_sid[0])
+                    start_data = msg.get("start", {})
+                    # Telnyx may use streamSid, stream_id, or top-level streamSid
+                    stream_sid[0] = (
+                        start_data.get("streamSid") or
+                        start_data.get("stream_id") or
+                        start_data.get("streamId") or
+                        msg.get("streamSid") or
+                        msg.get("stream_id") or
+                        "default"
+                    )
+                    logger.info("VOICE | Stream started | sid=%s | raw=%s", stream_sid[0], json.dumps(msg)[:300])
                     stream_ready.set()
 
                 elif event == "media":
@@ -573,7 +582,8 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
             # Synthesize and deliver opening greeting via ElevenLabs/Deepgram
             try:
                 audio = await _synthesize(opening)
-                if audio and sid:
+                if audio:
+                    sid = stream_sid[0]
                     is_speaking[0] = True
                     await _send_audio(ws, sid, audio)
                     audio_duration = len(audio) / _ULAW_BYTES_PER_SEC + 0.5
