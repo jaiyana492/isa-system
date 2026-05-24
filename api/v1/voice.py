@@ -152,11 +152,22 @@ async def _deepgram_listener(
 
 async def _synthesize(text: str) -> Optional[bytes]:
     """
-    TTS with automatic fallback:
+    TTS with cache-first strategy:
+      0. Redis audio cache  — instant, zero API cost
       1. ElevenLabs (primary) — eleven_turbo_v2_5, ulaw_8000
       2. Deepgram Aura (fallback) — aura-asteria-en, mulaw 8000Hz
-    Returns raw mulaw bytes for direct Twilio delivery. None if both fail.
+    Returns raw mulaw bytes for direct Telnyx delivery. None if all fail.
     """
+    # ── Cache check first ─────────────────────────────────────────────────
+    try:
+        from services.audio_cache import get_audio_for_response, store_audio
+        cached = await get_audio_for_response(text)
+        if cached:
+            logger.info("VOICE | TTS cache HIT | chars=%s", len(text))
+            return cached
+    except Exception:
+        pass
+
     # ── Primary: ElevenLabs ───────────────────────────────────────────────
     el_url = (
         f"https://api.elevenlabs.io/v1/text-to-speech"
@@ -164,7 +175,7 @@ async def _synthesize(text: str) -> Optional[bytes]:
         f"/stream?output_format=ulaw_8000&optimize_streaming_latency=3"
     )
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(
                 el_url,
                 headers={
@@ -184,13 +195,19 @@ async def _synthesize(text: str) -> Optional[bytes]:
             )
             r.raise_for_status()
             logger.info("VOICE | TTS via ElevenLabs | chars=%s", len(text))
-            return r.content
+            audio = r.content
+            try:
+                from services.audio_cache import store_audio
+                await store_audio(text, audio)
+            except Exception:
+                pass
+            return audio
     except Exception as e:
         logger.warning("VOICE | ElevenLabs TTS failed — trying Deepgram | error=%s", str(e))
 
     # ── Fallback: Deepgram Aura TTS ───────────────────────────────────────
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(
                 "https://api.deepgram.com/v1/speak"
                 "?model=aura-asteria-en&encoding=mulaw&sample_rate=8000&container=none",
