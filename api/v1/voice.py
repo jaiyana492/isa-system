@@ -212,17 +212,26 @@ async def _synthesize(text: str) -> Optional[bytes]:
 # AUDIO DELIVERY TO TWILIO
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _send_audio(ws: WebSocket, stream_sid: str, audio: bytes) -> None:
-    await ws.send_text(json.dumps({
-        "event":     "media",
-        "streamSid": stream_sid,
-        "media":     {"payload": base64.b64encode(audio).decode()},
-    }))
+async def _send_audio(ws: WebSocket, stream_sid: str, audio: bytes) -> bool:
+    """Send audio to Telnyx. Returns True on success, False on failure."""
+    try:
+        await ws.send_text(json.dumps({
+            "event":     "media",
+            "streamSid": stream_sid,
+            "media":     {"payload": base64.b64encode(audio).decode()},
+        }))
+        logger.info("VOICE | Audio sent | sid=%s | bytes=%s", stream_sid, len(audio))
+        return True
+    except Exception as e:
+        logger.error("VOICE | _send_audio FAILED | sid=%s | error=%s", stream_sid, str(e))
+        return False
 
 
 async def _clear_audio(ws: WebSocket, stream_sid: str) -> None:
-    """Tell Twilio to discard any audio it hasn't played yet (barge-in support)."""
-    await ws.send_text(json.dumps({"event": "clear", "streamSid": stream_sid}))
+    try:
+        await ws.send_text(json.dumps({"event": "clear", "streamSid": stream_sid}))
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -598,6 +607,8 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
         # ── Conversation loop — concurrent with _twilio_loop ──────────────
         async def _conversation_loop() -> None:
             await stream_ready.wait()
+            # Give Telnyx 300ms to fully initialize the stream before sending audio
+            await asyncio.sleep(0.3)
             sid = stream_sid[0]
             logger.info("VOICE | Stream ready — sending opening | sid=%s", sid)
 
@@ -606,15 +617,21 @@ async def voice_stream(ws: WebSocket, call_sid: str = "") -> None:
 
             # Synthesize and deliver opening greeting via ElevenLabs/Deepgram
             try:
+                logger.info("VOICE | Synthesizing opening | text=%.60s", opening)
                 audio = await _synthesize(opening)
                 if audio:
                     sid = stream_sid[0]
+                    logger.info("VOICE | Delivering opening audio | sid=%s | bytes=%s", sid, len(audio))
                     is_speaking[0] = True
-                    await _send_audio(ws, sid, audio)
+                    sent = await _send_audio(ws, sid, audio)
+                    if not sent:
+                        logger.error("VOICE | Opening audio delivery FAILED")
                     audio_duration = len(audio) / _ULAW_BYTES_PER_SEC + 0.5
                     await asyncio.sleep(audio_duration)
                     is_speaking[0] = False
-                    logger.info("VOICE | Opening delivered | chars=%s", len(opening))
+                    logger.info("VOICE | Opening delivered | chars=%s | duration=%.1fs", len(opening), audio_duration)
+                else:
+                    logger.error("VOICE | Opening TTS returned no audio — caller will hear silence")
             except Exception as e:
                 logger.error("VOICE | Opening synthesis failed | %s", str(e))
                 is_speaking[0] = False
